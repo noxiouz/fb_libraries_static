@@ -7,7 +7,9 @@ function(BuildFBEnvironment FB_install_prefix)
     set(COMMON_CMAKE_ARGS -DCMAKE_PREFIX_PATH=${FB_install_prefix} -DCMAKE_INSTALL_PREFIX=${FB_install_prefix} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE})
 
     if (${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
-        set(BOOST_USER_CONFIG --user-config=../../../project_config.jam)
+    set(BOOST_CLANG_PROJECT_CONFIG ${FB_install_prefix}/clang_project.config)
+        file(WRITE ${BOOST_CLANG_PROJECT_CONFIG} "using clang : : /usr/local/opt/llvm/bin/clang++ ;")
+        set(BOOST_USER_CONFIG --user-config=${BOOST_CLANG_PROJECT_CONFIG})
     endif()
     set(BOOST_BUILD_FLAGS
         link=static
@@ -20,15 +22,16 @@ function(BuildFBEnvironment FB_install_prefix)
         ${BOOST_USER_CONFIG}
         install
     )
-
+    set(BOOST_WITH_LIBRARIES context,filesystem,program_options,regex,system,thread)
+    message("Boost build flags: ${BOOST_USER_CONFIG}")
+    message("Boost libraries built: ${BOOST_WITH_LIBRARIES}")
     ExternalProject_add(boost
         URL         https://versaweb.dl.sourceforge.net/project/boost/boost/1.69.0/boost_1_69_0.tar.bz2
         URL_HASH    SHA256=8f32d4617390d1c2d16f26a27ab60d97807b35440d45891fa340fc2648b04406
-        CONFIGURE_COMMAND ./bootstrap.sh --prefix=${DEPS} --with-libraries=context,filesystem,program_options,regex,system,thread
+        CONFIGURE_COMMAND ./bootstrap.sh --prefix=${DEPS} --with-libraries=${BOOST_WITH_LIBRARIES}
         BUILD_COMMAND ./b2 ${BOOST_BUILD_FLAGS} 
         BUILD_IN_SOURCE true
     )
-
 
     ExternalProject_add(double-conversion
         URL		    https://github.com/google/double-conversion/archive/v3.1.4.tar.gz
@@ -75,7 +78,7 @@ function(BuildFBEnvironment FB_install_prefix)
     ExternalProject_Add(fb_folly
         URL         https://github.com/facebook/folly/releases/download/v2021.01.11.00/folly-v2021.01.11.00.tar.gz
         PREFIX      ${FB_install_prefix}
-        CMAKE_ARGS  ${COMMON_CMAKE_ARGS} -DBUILD_TESTS=OFF -DUSE_STATIC_DEPS_ON_UNIX=ON -DOPENSSL_ROOT_DIR=/usr/local/Cellar/openssl@1.1/1.1.1g
+        CMAKE_ARGS  ${COMMON_CMAKE_ARGS} -DBUILD_TESTS=OFF -DUSE_STATIC_DEPS_ON_UNIX=ON
     )
 
     ExternalProject_Add(fmt
@@ -86,9 +89,9 @@ function(BuildFBEnvironment FB_install_prefix)
     )
 
     ExternalProject_Add(sodium
-        URL		https://github.com/jedisct1/libsodium/releases/download/1.0.17/libsodium-1.0.17.tar.gz
+        URL		    https://github.com/jedisct1/libsodium/releases/download/1.0.17/libsodium-1.0.17.tar.gz
         URL_HASH	SHA256=0cc3dae33e642cc187b5ceb467e0ad0e1b51dcba577de1190e9ffa17766ac2b1
-        PREFIX	${FB_install_prefix}
+        PREFIX	    ${FB_install_prefix}
         CONFIGURE_COMMAND ./configure --prefix=${FB_install_prefix} --disable-shared
         UPDATE_COMMAND    ""
         BUILD_COMMAND     make
@@ -96,21 +99,22 @@ function(BuildFBEnvironment FB_install_prefix)
         INSTALL_COMMAND   make install
     )
 
-    ExternalProject_Add(libevent
-        URL		    https://github.com/libevent/libevent/archive/release-2.1.8-stable.tar.gz
-        URL_HASH	SHA256=316ddb401745ac5d222d7c529ef1eada12f58f6376a66c1118eee803cb70f83d
-        PREFIX      ${FB_install_prefix}
-        CMAKE_ARGS  ${COMMON_CMAKE_ARGS} -DEVENT__DISABLE_TESTS=ON -DEVENT__DISABLE_BENCHMARK=ON -DEVENT__DISABLE_SAMPLES=ON -DEVENT__DISABLE_REGRESS=ON -DCMAKE_INSTALL_PREFIX=${FB_install_prefix} -DOPENSSL_ROOT_DIR=/usr/local/Cellar/openssl@1.1/1.1.1g
-    )
-
     ExternalProject_Add(openssl
         URL         https://www.openssl.org/source/openssl-1.1.1b.tar.gz
         URL_HASH    SHA256=5c557b023230413dfb0756f3137a13e6d726838ccd1430888ad15bfb2b43ea4b
-        PREFIX            ${FB_install_prefix}
+        PREFIX      ${FB_install_prefix}
         CONFIGURE_COMMAND ./config no-shared no-tests --prefix=${FB_install_prefix} --openssldir=${FB_install_prefix} ${LibCryptoDebug}
         BUILD_COMMAND     make
         BUILD_IN_SOURCE   true
         INSTALL_COMMAND   make install_sw
+    )
+
+    ExternalProject_Add(libevent
+        URL		    https://github.com/libevent/libevent/archive/release-2.1.8-stable.tar.gz
+        URL_HASH	SHA256=316ddb401745ac5d222d7c529ef1eada12f58f6376a66c1118eee803cb70f83d
+        PREFIX      ${FB_install_prefix}
+        CMAKE_ARGS  ${COMMON_CMAKE_ARGS} -DEVENT__DISABLE_TESTS=ON -DEVENT__DISABLE_BENCHMARK=ON -DEVENT__DISABLE_SAMPLES=ON -DEVENT__DISABLE_REGRESS=ON -DCMAKE_INSTALL_PREFIX=${FB_install_prefix}
+        DEPENDS openssl
     )
 
     ExternalProject_Add(fb_fizz
